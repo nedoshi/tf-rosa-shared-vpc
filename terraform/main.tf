@@ -97,11 +97,6 @@ module "rosa_cluster" {
 
 # -----------------------------------------------------------------------------
 # 6. Post-cluster DNS fix for shared VPC
-# When using shared VPC, ROSA HCP creates the VPC endpoint but places the
-# wildcard *.apps record in the parent zone (cluster.hypershift.local) instead
-# of the dedicated ingress zone (apps.cluster.hypershift.local). The more-
-# specific ingress zone shadows the parent wildcard, breaking DNS resolution
-# for worker ignition. This resource adds the wildcard in the ingress zone.
 # -----------------------------------------------------------------------------
 data "aws_vpc_endpoint" "hcp" {
   count  = local.is_shared_vpc ? 1 : 0
