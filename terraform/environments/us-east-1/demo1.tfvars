@@ -12,4 +12,4 @@ oidc_config_id        = ""  # Set from: rosa create oidc-config --mode auto --ma
 vpc_cidr              = "10.220.228.0/24"
 availability_zones    = ["us-east-1a", "us-east-1b", "us-east-1c"]
 base_dns_domain       = "aws-na.mobb.cloud"
-shared_vpc_role_arn   = "arn:aws:iam::660250927410:role/ROSA-SharedVPC-TerraformRole"
+shared_vpc_role_arn   = "arn:aws:iam::5XXXXXXXXXX:role/ROSA-SharedVPC-TerraformRole"
