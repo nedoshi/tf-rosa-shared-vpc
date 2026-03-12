@@ -5,7 +5,7 @@ cluster_name          = "demo1"
 region                = "us-east-1"
 openshift_version     = "4.21.0"
 cluster_account_id    = "6XXXXXXXXXXX"
-shared_vpc_account_id = "6XXXXXXXXXXX"
+shared_vpc_account_id = "5XXXXXXXXXXX"
 account_roles_prefix  = "demo1"
 operator_roles_prefix = "demo1"
 oidc_config_id        = ""  # Set from: rosa create oidc-config --mode auto --managed=false -y
