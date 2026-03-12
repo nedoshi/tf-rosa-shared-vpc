@@ -1,0 +1,80 @@
+# Terraform and Provider Configuration
+# ROSA HCP Cluster Automation
+
+terraform {
+  required_version = ">= 1.4.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.38.0"
+      configuration_aliases = [aws.shared_vpc_account]
+    }
+    rhcs = {
+      source  = "terraform-redhat/rhcs"
+      version = ">= 1.6.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.23.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = ">= 2.11.0"
+    }
+  }
+}
+
+# -----------------------------------------------------------------------------
+# AWS Provider - Default (cluster account 660xxxxxxxxxx)
+# -----------------------------------------------------------------------------
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = var.tags
+  }
+}
+
+# -----------------------------------------------------------------------------
+# AWS Provider - Shared VPC Account (587905662149)
+# -----------------------------------------------------------------------------
+provider "aws" {
+  alias  = "shared_vpc_account"
+  region = var.region
+
+# assume_role {
+#   role_arn = var.shared_vpc_role_arn
+#  }
+
+  default_tags {
+    tags = var.tags
+  }
+}
+
+# -----------------------------------------------------------------------------
+# RHCS Provider - Red Hat Cloud Services
+# -----------------------------------------------------------------------------
+provider "rhcs" {
+  token = var.rhcs_token
+}
+
+# -----------------------------------------------------------------------------
+# Kubernetes Provider — uses oc/kubectl context after cluster login
+# Run `oc login` after cluster creation, then apply post-install resources.
+# In CI/CD, use a service account token or exec-based auth.
+# -----------------------------------------------------------------------------
+provider "kubernetes" {
+  host                   = try(module.rosa_cluster.cluster_api_url, "https://placeholder")
+  insecure               = false
+  config_path            = "~/.kube/config"
+}
+
+# -----------------------------------------------------------------------------
+# Helm Provider — same kubeconfig
+# -----------------------------------------------------------------------------
+provider "helm" {
+  kubernetes {
+    config_path = "~/.kube/config"
+  }
+}
