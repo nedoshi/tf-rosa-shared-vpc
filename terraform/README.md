@@ -8,13 +8,13 @@ KMS-encrypted StorageClasses.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Shared VPC Account (aws.shared_vpc_account provider)              │
+│  Shared VPC Account (aws.shared_vpc_account provider)               │
 │                                                                     │
-│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway        │
+│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway         │
 │   │                                                                 │
-│   ├── Private Subnet (AZ-a) ──┐                                    │
-│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                │
-│   └── Private Subnet (AZ-c) ──┘                                    │
+│   ├── Private Subnet (AZ-a) ──┐                                     │
+│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                 │
+│   └── Private Subnet (AZ-c) ──┘                                     │
 │                                                                     │
 │  Route53 Private Hosted Zones:                                      │
 │   ├── hypershift.local           (HCP internal)                     │
@@ -25,9 +25,9 @@ KMS-encrypted StorageClasses.
 ├─────────────────────────────────────────────────────────────────────┤
 │  Cluster Account (default aws provider)                             │
 │                                                                     │
-│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC        │
+│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC         │
 │  KMS Key (Terraform):   etcd + node volume encryption               │
-│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)        │
+│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
