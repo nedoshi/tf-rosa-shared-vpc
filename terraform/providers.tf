@@ -7,20 +7,20 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.38.0"
+      version = "~> 5.38"
       configuration_aliases = [aws.shared_vpc_account]
     }
     rhcs = {
       source  = "terraform-redhat/rhcs"
-      version = ">= 1.6.0"
+      version = "~> 1.6"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = ">= 2.23.0"
+      version = "~> 2.23"
     }
     helm = {
       source  = "hashicorp/helm"
-      version = ">= 2.11.0"
+      version = "~> 2.11"
     }
   }
 }
@@ -43,9 +43,9 @@ provider "aws" {
   alias  = "shared_vpc_account"
   region = var.region
 
-# assume_role {
-#   role_arn = var.shared_vpc_role_arn
-#  }
+  assume_role {
+    role_arn = var.shared_vpc_role_arn
+  }
 
   default_tags {
     tags = var.tags

@@ -46,12 +46,6 @@ variable "vpc_cidr" {
   type        = string
 }
 
-variable "subnet_ids" {
-  description = "Pre-existing private subnet IDs (required when shared_vpc_role_arn is empty)"
-  type        = list(string)
-  default     = []
-}
-
 variable "availability_zones" {
   description = "List of availability zones for the cluster"
   type        = list(string)

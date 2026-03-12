@@ -1,9 +1,0 @@
-apiVersion: v2
-name: aro-platform-config
-description: ARO (Azure Red Hat OpenShift) platform configuration
-type: application
-version: 1.0.0
-appVersion: "4.18"
-maintainers:
-  - name: Platform Team
-    email: platform-team@example.com

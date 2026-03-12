@@ -6,10 +6,9 @@ locals {
   is_shared_vpc      = var.shared_vpc_role_arn != ""
 }
 
-# 1. Shared VPC (in shared VPC account) - only created when using cross-account shared VPC
+# 1. VPC infrastructure — always creates VPC, subnets, NAT, hosted zones, IAM roles
 module "shared_vpc" {
   source = "./modules/shared-vpc"
-  count  = local.is_shared_vpc ? 1 : 0
 
   providers = {
     aws = aws.shared_vpc_account
@@ -69,7 +68,7 @@ module "rosa_cluster" {
   aws_account_id        = var.cluster_account_id
   openshift_version     = var.openshift_version
   availability_zones    = var.availability_zones
-  subnet_ids            = local.is_shared_vpc ? module.shared_vpc[0].private_subnet_ids : var.subnet_ids
+  subnet_ids            = module.shared_vpc.private_subnet_ids
   machine_cidr          = var.vpc_cidr
   kms_key_arn           = module.rosa_kms.kms_key_arn
   etcd_kms_key_arn      = module.rosa_kms.kms_key_arn
@@ -80,10 +79,10 @@ module "rosa_cluster" {
   worker_role_arn       = module.rosa_account_roles.worker_role_arn
 
   base_dns_domain       = local.is_shared_vpc ? var.base_dns_domain : ""
-  hcp_internal_hz_id    = local.is_shared_vpc ? module.shared_vpc[0].hcp_internal_hosted_zone_id : null
-  ingress_hz_id         = local.is_shared_vpc ? module.shared_vpc[0].ingress_hosted_zone_id : null
-  vpc_endpoint_role_arn = local.is_shared_vpc ? module.shared_vpc[0].vpc_endpoint_role_arn : null
-  route53_role_arn      = local.is_shared_vpc ? module.shared_vpc[0].route53_role_arn : null
+  hcp_internal_hz_id    = local.is_shared_vpc ? module.shared_vpc.hcp_internal_hosted_zone_id : null
+  ingress_hz_id         = local.is_shared_vpc ? module.shared_vpc.ingress_hosted_zone_id : null
+  vpc_endpoint_role_arn = local.is_shared_vpc ? module.shared_vpc.vpc_endpoint_role_arn : null
+  route53_role_arn      = local.is_shared_vpc ? module.shared_vpc.route53_role_arn : null
 
   external_auth_providers_enabled = var.external_auth_providers_enabled
 
@@ -96,11 +95,19 @@ module "rosa_cluster" {
 }
 
 # -----------------------------------------------------------------------------
+<<<<<<< HEAD
 # 6. Post-cluster DNS fix for shared VPC
+=======
+# 6. Post-cluster DNS fix
+# ROSA HCP places the wildcard *.apps record in the parent zone
+# (cluster.hypershift.local) instead of the dedicated ingress zone
+# (apps.cluster.hypershift.local). The more-specific ingress zone shadows
+# the parent wildcard, breaking DNS resolution for worker ignition.
+# This resource adds the wildcard directly in the ingress zone.
+>>>>>>> 156e1f1 (terraform module)
 # -----------------------------------------------------------------------------
 data "aws_vpc_endpoint" "hcp" {
-  count  = local.is_shared_vpc ? 1 : 0
-  vpc_id = module.shared_vpc[0].vpc_id
+  vpc_id = module.shared_vpc.vpc_id
 
   filter {
     name   = "vpc-endpoint-type"
@@ -112,17 +119,21 @@ data "aws_vpc_endpoint" "hcp" {
     values = ["available"]
   }
 
+  filter {
+    name   = "tag:red-hat-managed"
+    values = ["true"]
+  }
+
   depends_on = [module.rosa_cluster]
 }
 
 resource "aws_route53_record" "ingress_wildcard" {
-  count    = local.is_shared_vpc ? 1 : 0
   provider = aws.shared_vpc_account
-  zone_id  = module.shared_vpc[0].ingress_hosted_zone_id
+  zone_id  = module.shared_vpc.ingress_hosted_zone_id
   name     = "*.apps.${var.cluster_name}.hypershift.local"
   type     = "CNAME"
   ttl      = 300
-  records  = [data.aws_vpc_endpoint.hcp[0].dns_entry[0].dns_name]
+  records  = [data.aws_vpc_endpoint.hcp.dns_entry[0].dns_name]
 
   depends_on = [module.rosa_cluster]
 }
