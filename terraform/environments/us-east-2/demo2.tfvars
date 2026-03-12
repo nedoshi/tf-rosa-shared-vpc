@@ -10,4 +10,4 @@ operator_roles_prefix = "demo2"
 oidc_config_id        = ""  # Set from: rosa create oidc-config --mode auto --managed=false -y
 vpc_cidr              = "10.221.0.0/24"
 availability_zones    = ["us-east-2a", "us-east-2b", "us-east-2c"]
-shared_vpc_role_arn   = "arn:aws:iam::587905662149:role/ROSA-SharedVPC-TerraformRole"
+shared_vpc_role_arn   = "arn:aws:iam::5XXXXXXXX:role/ROSA-SharedVPC-TerraformRole"
