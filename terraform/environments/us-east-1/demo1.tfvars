@@ -8,7 +8,7 @@ cluster_account_id    = "660250927410"
 shared_vpc_account_id = "660250927410"
 account_roles_prefix  = "demo1"
 operator_roles_prefix = "demo1"
-oidc_config_id        = "2p09v0f9057umaeikp1v98ueshhmvlir"  # Set from: rosa create oidc-config --mode auto --managed=false -y
+oidc_config_id        = ""  # Set from: rosa create oidc-config --mode auto --managed=false -y
 vpc_cidr              = "10.220.228.0/24"
 availability_zones    = ["us-east-1a", "us-east-1b", "us-east-1c"]
 base_dns_domain       = "aws-na.mobb.cloud"
