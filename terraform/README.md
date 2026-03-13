@@ -10,11 +10,11 @@ KMS-encrypted StorageClasses.
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Shared VPC Account (aws.shared_vpc_account provider)                │
 │                                                                      │
-│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway         │
+│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway          │
 │   │                                                                  │
-│   ├── Private Subnet (AZ-a) ──┐                                     │
-│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                 │
-│   └── Private Subnet (AZ-c) ──┘                                     │
+│   ├── Private Subnet (AZ-a) ──┐                                      │
+│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                  │
+│   └── Private Subnet (AZ-c) ──┘                                      │
 │                                                                      │
 │  Route53 Private Hosted Zones:                                       │
 │   ├── <cluster>.hypershift.local              (HCP internal)         │
@@ -27,12 +27,12 @@ KMS-encrypted StorageClasses.
 ├──────────────────────────────────────────────────────────────────────┤
 │  Cluster Account (default aws provider)                              │
 │                                                                      │
-│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC         │
+│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC          │
 │  Inline policies (Terraform):                                        │
 │   ├── control-plane-operator  → sts:AssumeRole shared VPC roles      │
 │   └── ingress-operator        → sts:AssumeRole shared VPC roles      │
 │  KMS Key (Terraform):   etcd + node volume encryption                │
-│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)         │
+│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)          │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -351,26 +351,6 @@ With the correct hosted zone naming (`rosa.<cluster>.<base_domain>` for ingress)
 ROSA HCP automatically creates the `*.apps` wildcard CNAME record in the ingress
 zone during cluster creation. No manual DNS fix is required.
 
-> **Note:** Earlier iterations of this automation used `apps.<cluster>.hypershift.local`
-> as the ingress zone, which caused a DNS zone shadowing problem requiring a manual
-> wildcard fix. This is no longer needed with the correct zone naming convention.
-
-## Important: Always Plan Before Apply
-
-**Never run `terraform apply -auto-approve` without reviewing the plan first.**
-Terraform may mark resources as "tainted" from previous failed operations, which
-causes them to be destroyed and recreated — including the cluster itself. Always:
-
-1. Run `terraform plan` and review the output
-2. Verify **0 resources to destroy** (unless you intend destruction)
-3. Check that no resources show "tainted, so must be replaced"
-4. Only then run `terraform apply`
-
-If you see a tainted resource, untaint it first:
-```bash
-terraform untaint <resource_address>
-```
-
 ## Notes
 
 - Backend is **local** for testing. Uncomment S3 backend in `backend.tf` for production.
@@ -390,11 +370,6 @@ ROSA HCP clusters on AWS use `p3.openshiftapps.com` as their architecture parent
 domain. The `base_dns_domain` (mandatory for shared VPC clusters) must be a
 subdomain reserved under this parent via `rosa create dns-domain --hosted-cp`.
 
-| Domain type | Example | HCP compatible? |
-|-------------|---------|-----------------|
-| HCP domain (p3) | `xxxx.p3.openshiftapps.com` | Yes |
-| Classic ROSA (p1) | `xxxx.p1.openshiftapps.com` | No |
-| Custom domain | `example.com` | No |
 
 ### Hosted Zone Naming
 
