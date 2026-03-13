@@ -18,6 +18,8 @@ module "shared_vpc" {
   region             = var.region
   vpc_cidr           = var.vpc_cidr
   cluster_account_id = var.cluster_account_id
+  installer_role_arn = "arn:aws:iam::${var.cluster_account_id}:role/${var.account_roles_prefix}-HCP-ROSA-Installer-Role"
+  base_dns_domain    = var.base_dns_domain
   availability_zones = var.availability_zones
   tags               = var.tags
 }
@@ -59,6 +61,38 @@ module "rosa_kms" {
   depends_on = [module.rosa_operator_roles]
 }
 
+# 4b. Grant operator roles permission to assume shared VPC roles.
+#     The operator roles are created by `rosa create operator-roles` but don't
+#     include sts:AssumeRole for shared VPC roles — we must add it ourselves.
+locals {
+  shared_vpc_role_arns = local.is_shared_vpc ? [
+    module.shared_vpc.vpc_endpoint_role_arn,
+    module.shared_vpc.route53_role_arn
+  ] : []
+
+  operator_roles_needing_shared_vpc = local.is_shared_vpc ? {
+    control_plane_operator = "${var.operator_roles_prefix}-kube-system-control-plane-operator"
+    ingress_operator       = "${var.operator_roles_prefix}-openshift-ingress-operator-cloud-credentials"
+  } : {}
+}
+
+resource "aws_iam_role_policy" "operator_assume_shared_vpc" {
+  for_each = local.operator_roles_needing_shared_vpc
+
+  name = "AssumeSharedVPCRoles"
+  role = each.value
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
+        Resource = local.shared_vpc_role_arns
+      }
+    ]
+  })
+}
+
 # 5. ROSA HCP Cluster - depends on shared VPC, account roles, operator roles, KMS
 module "rosa_cluster" {
   source = "./modules/rosa-cluster"
@@ -90,55 +124,12 @@ module "rosa_cluster" {
     module.shared_vpc,
     module.rosa_account_roles,
     module.rosa_operator_roles,
-    module.rosa_kms
+    module.rosa_kms,
+    aws_iam_role_policy.operator_assume_shared_vpc
   ]
 }
 
-# -----------------------------------------------------------------------------
-<<<<<<< HEAD
-# 6. Post-cluster DNS fix for shared VPC
-=======
-# 6. Post-cluster DNS fix
-# ROSA HCP places the wildcard *.apps record in the parent zone
-# (cluster.hypershift.local) instead of the dedicated ingress zone
-# (apps.cluster.hypershift.local). The more-specific ingress zone shadows
-# the parent wildcard, breaking DNS resolution for worker ignition.
-# This resource adds the wildcard directly in the ingress zone.
->>>>>>> 156e1f1 (terraform module)
-# -----------------------------------------------------------------------------
-data "aws_vpc_endpoint" "hcp" {
-  vpc_id = module.shared_vpc.vpc_id
-
-  filter {
-    name   = "vpc-endpoint-type"
-    values = ["Interface"]
-  }
-
-  filter {
-    name   = "vpc-endpoint-state"
-    values = ["available"]
-  }
-
-  filter {
-    name   = "tag:red-hat-managed"
-    values = ["true"]
-  }
-
-  depends_on = [module.rosa_cluster]
-}
-
-resource "aws_route53_record" "ingress_wildcard" {
-  provider = aws.shared_vpc_account
-  zone_id  = module.shared_vpc.ingress_hosted_zone_id
-  name     = "*.apps.${var.cluster_name}.hypershift.local"
-  type     = "CNAME"
-  ttl      = 300
-  records  = [data.aws_vpc_endpoint.hcp.dns_entry[0].dns_name]
-
-  depends_on = [module.rosa_cluster]
-}
-
-# 7. Post-install (storage classes) - depends on cluster
+# 6. Post-install (storage classes) - depends on cluster
 module "rosa_post_install" {
   source = "./modules/rosa-post-install"
 
