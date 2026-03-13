@@ -67,8 +67,8 @@ terraform/
 │   └── rosa-post-install/  # KMS-encrypted StorageClasses, demotes default gp3-csi
 └── environments/
     ├── us-east-1/demo1.tfvars   # Shared VPC (same-account testing)
-    ├── us-east-2/demo2.tfvars   # Shared VPC (cross-account)
-    └── us-west-2/demo3.tfvars   # Shared VPC (cross-account)
+    ├── us-east-2/demo2.tfvars   # Shared VPC 
+    └── us-west-2/demo3.tfvars   # Shared VPC 
 ```
 
 ## Dependency Chain
