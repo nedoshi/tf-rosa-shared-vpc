@@ -7,31 +7,37 @@ KMS-encrypted StorageClasses.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Shared VPC Account (aws.shared_vpc_account provider)               │
-│                                                                     │
+┌──────────────────────────────────────────────────────────────────────┐
+│  Shared VPC Account (aws.shared_vpc_account provider)                │
+│                                                                      │
 │  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway         │
-│   │                                                                 │
+│   │                                                                  │
 │   ├── Private Subnet (AZ-a) ──┐                                     │
 │   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                 │
 │   └── Private Subnet (AZ-c) ──┘                                     │
-│                                                                     │
-│  Route53 Private Hosted Zones:                                      │
-│   ├── hypershift.local           (HCP internal)                     │
-│   └── apps.<cluster>.hypershift.local  (ingress + DNS wildcard fix) │
-│                                                                     │
-│  IAM Roles: route53-role, vpc-endpoint-role                         │
-│  VPC Endpoint: PrivateLink to HCP control plane                     │
-├─────────────────────────────────────────────────────────────────────┤
-│  Cluster Account (default aws provider)                             │
-│                                                                     │
+│                                                                      │
+│  Route53 Private Hosted Zones:                                       │
+│   ├── <cluster>.hypershift.local              (HCP internal)         │
+│   └── rosa.<cluster>.<base_dns_domain>        (ingress)              │
+│                                                                      │
+│  IAM Roles (Terraform):                                              │
+│   ├── route53-role       → ROSASharedVPCRoute53Policy                │
+│   └── vpc-endpoint-role  → ROSASharedVPCEndpointPolicy               │
+│  VPC Endpoint: PrivateLink to HCP control plane                      │
+├──────────────────────────────────────────────────────────────────────┤
+│  Cluster Account (default aws provider)                              │
+│                                                                      │
 │  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC         │
-│  KMS Key (Terraform):   etcd + node volume encryption               │
+│  Inline policies (Terraform):                                        │
+│   ├── control-plane-operator  → sts:AssumeRole shared VPC roles      │
+│   └── ingress-operator        → sts:AssumeRole shared VPC roles      │
+│  KMS Key (Terraform):   etcd + node volume encryption                │
 │  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)         │
-└─────────────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 For testing, both accounts can be the same AWS account.
+See [SHARED-VPC-IAM.md](SHARED-VPC-IAM.md) for a detailed IAM roles and trust policies reference.
 
 ## Prerequisites
 
@@ -51,7 +57,7 @@ terraform/
 ├── providers.tf            # AWS (default + shared_vpc alias), RHCS, kubernetes, helm
 ├── variables.tf            # Root-level input variables
 ├── outputs.tf              # Cluster URLs, KMS ARN, cluster ID
-├── main.tf                 # Module orchestration + DNS fix
+├── main.tf                 # Module orchestration + operator IAM policies
 ├── modules/
 │   ├── shared-vpc/         # VPC, subnets, NAT, hosted zones, IAM roles
 │   ├── rosa-account-roles/ # Data source lookups (rosa CLI creates the actual roles)
@@ -68,13 +74,15 @@ terraform/
 ## Dependency Chain
 
 ```
-Step 0: rosa CLI ──→ account-roles, OIDC config, operator-roles
-                          │
-Step 1: terraform  ──→ shared_vpc ──→ KMS ──→ cluster ──→ DNS fix
-                          │
-Step 2: oc login   ──→ bastion SSH tunnel (private cluster)
-                          │
-Step 3: terraform  ──→ post-install (StorageClasses)
+Step 0:  rosa CLI   ──→ account-roles, OIDC config, operator-roles, DNS domain
+                           │
+Step 1a: terraform  ──→ shared_vpc + operator IAM policies
+                           │  (wait 15s for IAM propagation)
+Step 1b: terraform  ──→ KMS ──→ cluster
+                           │
+Step 2:  oc login   ──→ bastion SSH tunnel (private cluster)
+                           │
+Step 3:  terraform  ──→ post-install (StorageClasses)
 ```
 
 ---
@@ -96,16 +104,18 @@ rosa create account-roles --prefix demo1 --hosted-cp --mode auto -y
 
 # Create OIDC config — save the ID from the output!
 rosa create oidc-config --mode auto --managed=false -y
-# Output example: "OIDC Configuration ID: 2p09v0f9057umaeikp1v98ueshhmvlir"
+# Output example: "OIDC Configuration ID: 2pXXXXXXXXXXXXXXX"
 
 # Get the installer role ARN
 INSTALLER_ROLE_ARN=$(aws iam get-role \
   --role-name demo1-HCP-ROSA-Installer-Role \
   --query 'Role.Arn' --output text)
 
+OIDC_CONFIG_ID="2pxxxxxxxxxxxxxxxx" # Output from above
+
 # Create operator roles
 rosa create operator-roles --prefix demo1 --hosted-cp \
-  --oidc-config-id <OIDC_CONFIG_ID> \
+  --oidc-config-id $OIDC_CONFIG_ID \
   --installer-role-arn $INSTALLER_ROLE_ARN \
   --mode auto -y
 
@@ -115,6 +125,27 @@ rosa list operator-roles | grep demo1
 ```
 
 Update `oidc_config_id` in `environments/us-east-1/demo1.tfvars` with the ID from above.
+
+### Step 0a: Reserve a DNS domain for HCP
+
+Shared VPC HCP clusters **require** a `base_dns_domain`. The domain must be
+registered with OCM under the `p3.openshiftapps.com` parent (the HCP architecture
+parent for AWS). A classic ROSA domain (e.g. `p1.openshiftapps.com`) or an
+unrelated custom domain will be rejected.
+
+```bash
+# Create an HCP-compatible DNS domain
+rosa create dns-domain --hosted-cp
+
+# List domains — copy the one under p3.openshiftapps.com
+rosa list dns-domains
+# Example output: xxxx.p3.openshiftapps.com
+```
+
+Update `base_dns_domain` in your tfvars:
+```
+base_dns_domain = "xxxx.p3.openshiftapps.com"
+```
 
 ### Step 0b: Create IAM role for shared VPC (same-account testing)
 
@@ -145,6 +176,9 @@ shared_vpc_role_arn = "arn:aws:iam::<ACCOUNT_ID>:role/ROSA-SharedVPC-TerraformRo
 
 ### Step 1: Deploy infrastructure + cluster
 
+Deployment is split into two stages to allow IAM policy propagation before
+the cluster creation validates role access.
+
 ```bash
 cd terraform
 export TF_VAR_rhcs_token=$(rosa token)
@@ -152,32 +186,29 @@ export TF_VAR_rhcs_token=$(rosa token)
 # Initialize
 terraform init
 
-# ALWAYS plan first — review the output before applying
-terraform plan -var-file=environments/us-east-1/demo1.tfvars \
-  -target=module.shared_vpc \
-  -target=module.rosa_account_roles \
-  -target=module.rosa_operator_roles \
-  -target=module.rosa_kms \
-  -target=module.rosa_cluster \
-  -target=data.aws_vpc_endpoint.hcp \
-  -target=aws_route53_record.ingress_wildcard
-
-# Review the plan! Verify:
-#   - 0 resources to destroy
-#   - Cluster resource shows shared_vpc block with hosted zone IDs
-#   - DNS wildcard record will be created
-# Then apply:
+# --- Stage 1a: VPC, hosted zones, IAM roles, operator policies ---
 terraform apply -var-file=environments/us-east-1/demo1.tfvars \
   -target=module.shared_vpc \
+  -target=aws_iam_role_policy.operator_assume_shared_vpc
+
+# Wait for IAM propagation (trust policies + inline policies)
+sleep 15
+
+# --- Stage 1b: Cluster ---
+terraform apply -var-file=environments/us-east-1/demo1.tfvars \
   -target=module.rosa_account_roles \
   -target=module.rosa_operator_roles \
   -target=module.rosa_kms \
-  -target=module.rosa_cluster \
-  -target=data.aws_vpc_endpoint.hcp \
-  -target=aws_route53_record.ingress_wildcard
+  -target=module.rosa_cluster
 ```
 
-This takes ~20-30 minutes (cluster creation is the bottleneck).
+Stage 1b takes ~20-30 minutes (cluster creation is the bottleneck).
+
+**Why two stages?** ROSA validates that all shared VPC IAM roles are
+assumable before starting cluster creation. If the trust policy or operator
+inline policy was just created in the same Terraform run, AWS IAM eventual
+consistency may cause the validation to fail. The 15-second pause ensures
+propagation.
 
 ### Step 2: Access the private cluster via bastion
 
@@ -314,17 +345,15 @@ aws iam delete-role --role-name ROSA-SharedVPC-TerraformRole
 | kms_key_arn | Customer-managed KMS key ARN |
 | oidc_config_id | OIDC configuration ID |
 
-## DNS Zone Shadowing Fix
+## DNS Wildcard Record
 
-ROSA HCP pre-creates the `apps.<cluster>.hypershift.local` Private Hosted Zone
-but places the wildcard `*.apps.<cluster>.hypershift.local` CNAME in the parent
-`<cluster>.hypershift.local` zone. Route53 resolves using the most-specific zone,
-so the empty child zone shadows the parent's wildcard. Workers fail to resolve
-`ignition-server.apps.<cluster>.hypershift.local` and get stuck in a boot loop.
+With the correct hosted zone naming (`rosa.<cluster>.<base_domain>` for ingress),
+ROSA HCP automatically creates the `*.apps` wildcard CNAME record in the ingress
+zone during cluster creation. No manual DNS fix is required.
 
-The `aws_route53_record.ingress_wildcard` resource in `main.tf` fixes this
-automatically by adding the wildcard CNAME directly in the ingress zone after
-the cluster creates the VPC endpoint.
+> **Note:** Earlier iterations of this automation used `apps.<cluster>.hypershift.local`
+> as the ingress zone, which caused a DNS zone shadowing problem requiring a manual
+> wildcard fix. This is no longer needed with the correct zone naming convention.
 
 ## Important: Always Plan Before Apply
 
@@ -348,3 +377,31 @@ terraform untaint <resource_address>
 - Account roles, OIDC, and operator roles are created by `rosa` CLI. Terraform only looks them up via data sources.
 - Post-install (Step 4) requires cluster API access via the SOCKS tunnel. It must be a separate apply stage.
 - Provider versions are pinned to `~> major.minor` for compatibility with Terraform v1.5.x.
+
+## Shared VPC IAM Reference
+
+See [SHARED-VPC-IAM.md](SHARED-VPC-IAM.md) for a complete reference of all
+IAM roles, trust policies, permissions policies, and hosted zone naming
+conventions required for ROSA HCP shared VPC deployments.
+
+## DNS Domain Compatibility
+
+ROSA HCP clusters on AWS use `p3.openshiftapps.com` as their architecture parent
+domain. The `base_dns_domain` (mandatory for shared VPC clusters) must be a
+subdomain reserved under this parent via `rosa create dns-domain --hosted-cp`.
+
+| Domain type | Example | HCP compatible? |
+|-------------|---------|-----------------|
+| HCP domain (p3) | `xxxx.p3.openshiftapps.com` | Yes |
+| Classic ROSA (p1) | `xxxx.p1.openshiftapps.com` | No |
+| Custom domain | `example.com` | No |
+
+### Hosted Zone Naming
+
+ROSA HCP validates that the private hosted zone names match the cluster's domain
+structure. The required pattern is:
+
+| Zone | Name pattern | Example |
+|------|-------------|---------|
+| HCP internal | `<cluster_name>.hypershift.local` | `demo1.hypershift.local` |
+| Ingress | `rosa.<cluster_name>.<base_dns_domain>` | `rosa.demo1.5lqd.p3.openshiftapps.com` |
