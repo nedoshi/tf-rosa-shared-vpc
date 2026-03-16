@@ -80,7 +80,75 @@ variable "base_dns_domain" {
 }
 
 variable "external_auth_providers_enabled" {
-  description = "Enable external authentication providers (e.g. OIDC)"
+  description = "Enable external authentication providers (bypasses built-in OAuth). Set to false to use the ROSA built-in OAuth server with IdP integration."
   type        = bool
   default     = false
+}
+
+# ---------------------------------------------------------------------------
+# Microsoft Entra ID / OIDC Identity Provider
+# ---------------------------------------------------------------------------
+
+variable "entra_idp_enabled" {
+  description = "Enable Microsoft Entra ID OIDC identity provider on the ROSA cluster"
+  type        = bool
+  default     = false
+}
+
+variable "entra_idp_name" {
+  description = "Display name of the OIDC IdP shown on the ROSA login page"
+  type        = string
+  default     = "Entra-ID"
+}
+
+variable "entra_admin_group_name" {
+  description = "Display name for the Entra ID security group mapped to cluster-admin"
+  type        = string
+  default     = "ROSA-Cluster-Admins"
+}
+
+variable "entra_admin_group_member_object_ids" {
+  description = "Entra ID object IDs of users/principals to add to the admin group"
+  type        = list(string)
+  default     = []
+}
+
+variable "disable_kubeadmin" {
+  description = "Delete the kubeadmin credential after Entra ID IdP is configured"
+  type        = bool
+  default     = true
+}
+
+# Set to false when the Terraform SP lacks Graph API permissions.
+# Pre-create the app registration + group in the Azure Portal, then supply
+# the entra_existing_* values below.
+variable "manage_entra_resources" {
+  description = "If true, Terraform creates Entra ID app & group. If false, use pre-created resources."
+  type        = bool
+  default     = true
+}
+
+variable "entra_existing_client_id" {
+  description = "Client ID of a pre-created Entra ID app registration"
+  type        = string
+  default     = ""
+}
+
+variable "entra_existing_client_secret" {
+  description = "Client secret of a pre-created Entra ID app registration"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "entra_existing_tenant_id" {
+  description = "Entra ID tenant ID for the pre-created app"
+  type        = string
+  default     = ""
+}
+
+variable "entra_existing_admin_group_object_id" {
+  description = "Object ID of a pre-created Entra ID security group for cluster-admin"
+  type        = string
+  default     = ""
 }

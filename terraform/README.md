@@ -10,11 +10,11 @@ KMS-encrypted StorageClasses, and Microsoft Entra ID OIDC authentication with ku
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Shared VPC Account (aws.shared_vpc_account provider)                │
 │                                                                      │
-│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway          │
+│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway         │
 │   │                                                                  │
-│   ├── Private Subnet (AZ-a) ──┐                                      │
-│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                  │
-│   └── Private Subnet (AZ-c) ──┘                                      │
+│   ├── Private Subnet (AZ-a) ──┐                                     │
+│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                 │
+│   └── Private Subnet (AZ-c) ──┘                                     │
 │                                                                      │
 │  Route53 Private Hosted Zones:                                       │
 │   ├── <cluster>.hypershift.local              (HCP internal)         │
@@ -27,12 +27,12 @@ KMS-encrypted StorageClasses, and Microsoft Entra ID OIDC authentication with ku
 ├──────────────────────────────────────────────────────────────────────┤
 │  Cluster Account (default aws provider)                              │
 │                                                                      │
-│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC          │
+│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC         │
 │  Inline policies (Terraform):                                        │
 │   ├── control-plane-operator  → sts:AssumeRole shared VPC roles      │
 │   └── ingress-operator        → sts:AssumeRole shared VPC roles      │
 │  KMS Key (Terraform):   etcd + node volume encryption                │
-│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)          │
+│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)         │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Microsoft Entra ID (azuread provider)                               │
 │                                                                      │
@@ -384,32 +384,86 @@ az ad user show --id user@example.com --query id -o tsv
 
 ### Step 6: Deploy Entra ID OIDC Identity Provider
 
-This step creates the Entra ID app registration, admin security group, OIDC
-identity provider on the ROSA OAuth server, the `cluster-admin` RBAC binding,
-and deletes the `kubeadmin` credential.
+The module supports two modes controlled by `manage_entra_resources` in your
+tfvars:
+
+| Mode | `manage_entra_resources` | Graph API Permissions Needed | What Terraform Creates |
+|------|--------------------------|------------------------------|------------------------|
+| **A — Fully managed** | `true` (default) | `Application.ReadWrite.All`, `Group.ReadWrite.All` | App registration, service principal, secret, group, IdP, RBAC |
+| **B — Pre-created** | `false` | None | IdP + RBAC only (app & group created manually) |
 
 > **WARNING:** Once `kubeadmin` is deleted, the **only** way to administer the
 > cluster is through the Entra ID IdP. Ensure at least one user Object ID is in
 > `entra_admin_group_member_object_ids` before applying.
+
+#### Mode A: Fully managed (Terraform creates Entra ID resources)
+
+Requires the Terraform service principal to have `Application.ReadWrite.All` and
+`Group.ReadWrite.All` Microsoft Graph API permissions with admin consent.
 
 ```bash
 cd terraform
 export TF_VAR_rhcs_token=$(rosa token)
 export HTTPS_PROXY=socks5://localhost:1080  # skip if using sshuttle
 
-# Plan — review carefully
 terraform plan -var-file=environments/us-east-1/demo1.tfvars \
   -target=module.rosa_entra_idp
 
 # Expected resources:
-#   azuread_application          — OIDC app registration
-#   azuread_service_principal    — enables user sign-in
-#   azuread_application_password — client secret (1-year expiry)
-#   azuread_group                — admin security group
-#   azuread_group_member         — one per admin Object ID
-#   rhcs_identity_provider       — Entra-ID IdP on the ROSA OAuth server
-#   kubernetes_cluster_role_binding — binds admin group to cluster-admin
-#   null_resource                — deletes kubeadmin secret
+#   azuread_application, azuread_service_principal, azuread_application_password
+#   azuread_group, azuread_group_member
+#   rhcs_identity_provider, kubernetes_cluster_role_binding
+
+terraform apply -var-file=environments/us-east-1/demo1.tfvars \
+  -target=module.rosa_entra_idp
+```
+
+#### Mode B: Pre-created Entra ID resources (no Graph permissions required)
+
+Use this when the Terraform service principal lacks Graph API permissions.
+Create the app registration and security group manually, then let Terraform
+configure the ROSA IdP and RBAC binding.
+
+**Step B.1 — Create app registration in Azure Portal:**
+
+1. **Entra ID** > **App registrations** > **New registration**
+   - Name: `<cluster_name>-rosa-oidc`
+   - Supported account types: **Single tenant**
+   - Redirect URI (Web): `https://oauth.<apps_domain>/oauth2callback/Entra-ID`
+2. **Authentication** > **Implicit grant** > enable **ID tokens**
+3. **Token configuration** > **Add optional claim** > ID token: `email`, `preferred_username`
+4. **API permissions** > Add: `openid`, `email`, `profile`, `User.Read` (Delegated)
+5. **Certificates & secrets** > **New client secret** (1 year) — copy the **Value**
+
+**Step B.2 — Create security group:**
+
+1. **Entra ID** > **Groups** > **New group**
+   - Type: Security
+   - Name: `demo1-ROSA-Cluster-Admins`
+2. Add members to the group
+
+**Step B.3 — Fill in tfvars:**
+
+```hcl
+manage_entra_resources               = false
+entra_existing_tenant_id             = "<your-tenant-id>"
+entra_existing_client_id             = "<app-client-id>"
+entra_existing_client_secret         = "<client-secret-value>"
+entra_existing_admin_group_object_id = "<group-object-id>"
+```
+
+**Step B.4 — Apply:**
+
+```bash
+cd terraform
+export TF_VAR_rhcs_token=$(rosa token)
+export HTTPS_PROXY=socks5://localhost:1080  # skip if using sshuttle
+
+terraform plan -var-file=environments/us-east-1/demo1.tfvars \
+  -target=module.rosa_entra_idp
+
+# Expected resources (no azuread_* resources):
+#   rhcs_identity_provider, kubernetes_cluster_role_binding
 
 terraform apply -var-file=environments/us-east-1/demo1.tfvars \
   -target=module.rosa_entra_idp

@@ -129,7 +129,37 @@ module "rosa_cluster" {
   ]
 }
 
-# 6. Post-install (storage classes) - depends on cluster
+# 6. Entra ID OIDC Identity Provider — configures built-in OAuth with Entra IdP,
+#    creates the admin group, binds it to cluster-admin, and disables kubeadmin.
+locals {
+  cluster_apps_domain = replace(module.rosa_cluster.cluster_console_url, "https://console-openshift-console.", "")
+  oauth_callback_url  = "https://oauth.${local.cluster_apps_domain}/oauth2callback/${var.entra_idp_name}"
+}
+
+module "rosa_entra_idp" {
+  count  = var.entra_idp_enabled ? 1 : 0
+  source = "./modules/rosa-entra-idp"
+
+  cluster_id   = module.rosa_cluster.cluster_id
+  cluster_name = var.cluster_name
+
+  oauth_callback_url = local.oauth_callback_url
+  idp_name           = var.entra_idp_name
+
+  admin_group_name              = var.entra_admin_group_name
+  admin_group_member_object_ids = var.entra_admin_group_member_object_ids
+  disable_kubeadmin             = var.disable_kubeadmin
+
+  manage_entra_resources               = var.manage_entra_resources
+  entra_existing_client_id             = var.entra_existing_client_id
+  entra_existing_client_secret         = var.entra_existing_client_secret
+  entra_existing_tenant_id             = var.entra_existing_tenant_id
+  entra_existing_admin_group_object_id = var.entra_existing_admin_group_object_id
+
+  depends_on = [module.rosa_cluster]
+}
+
+# 7. Post-install (storage classes) - depends on cluster
 module "rosa_post_install" {
   source = "./modules/rosa-post-install"
 
