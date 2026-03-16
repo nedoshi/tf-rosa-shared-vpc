@@ -10,11 +10,11 @@ KMS-encrypted StorageClasses, and Microsoft Entra ID OIDC authentication with ku
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Shared VPC Account (aws.shared_vpc_account provider)                │
 │                                                                      │
-│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway         │
+│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway          │
 │   │                                                                  │
-│   ├── Private Subnet (AZ-a) ──┐                                     │
-│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                 │
-│   └── Private Subnet (AZ-c) ──┘                                     │
+│   ├── Private Subnet (AZ-a) ──┐                                      │
+│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                  │
+│   └── Private Subnet (AZ-c) ──┘                                      │
 │                                                                      │
 │  Route53 Private Hosted Zones:                                       │
 │   ├── <cluster>.hypershift.local              (HCP internal)         │
@@ -27,12 +27,12 @@ KMS-encrypted StorageClasses, and Microsoft Entra ID OIDC authentication with ku
 ├──────────────────────────────────────────────────────────────────────┤
 │  Cluster Account (default aws provider)                              │
 │                                                                      │
-│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC         │
+│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC          │
 │  Inline policies (Terraform):                                        │
 │   ├── control-plane-operator  → sts:AssumeRole shared VPC roles      │
 │   └── ingress-operator        → sts:AssumeRole shared VPC roles      │
 │  KMS Key (Terraform):   etcd + node volume encryption                │
-│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)         │
+│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Microsoft Entra ID (azuread provider)                               │
 │                                                                      │
