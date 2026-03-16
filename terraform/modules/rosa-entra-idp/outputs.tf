@@ -1,21 +1,21 @@
 output "entra_app_client_id" {
   description = "Application (client) ID of the Entra ID OIDC app registration"
-  value       = azuread_application.rosa_oidc.client_id
+  value       = local.client_id
 }
 
 output "entra_app_object_id" {
-  description = "Object ID of the Entra ID application"
-  value       = azuread_application.rosa_oidc.object_id
+  description = "Object ID of the Entra ID application (null when using pre-created resources)"
+  value       = local.manage ? azuread_application.rosa_oidc[0].object_id : null
 }
 
 output "admin_group_object_id" {
   description = "Object ID of the Entra ID admin security group"
-  value       = azuread_group.rosa_cluster_admins.object_id
+  value       = local.admin_group_id
 }
 
 output "admin_group_display_name" {
   description = "Display name of the Entra ID admin security group"
-  value       = azuread_group.rosa_cluster_admins.display_name
+  value       = local.manage ? azuread_group.rosa_cluster_admins[0].display_name : var.admin_group_name
 }
 
 output "idp_name" {
@@ -25,5 +25,5 @@ output "idp_name" {
 
 output "entra_tenant_id" {
   description = "Entra ID tenant ID used for the OIDC issuer"
-  value       = data.azuread_client_config.current.tenant_id
+  value       = local.tenant_id
 }
