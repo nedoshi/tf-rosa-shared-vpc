@@ -10,11 +10,11 @@ KMS-encrypted StorageClasses, and Microsoft Entra ID OIDC authentication with ku
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Shared VPC Account (aws.shared_vpc_account provider)                │
 │                                                                      │
-│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway         │
+│  VPC ─── Public Subnet ─── NAT Gateway ─── Internet Gateway          │
 │   │                                                                  │
-│   ├── Private Subnet (AZ-a) ──┐                                     │
-│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                 │
-│   └── Private Subnet (AZ-c) ──┘                                     │
+│   ├── Private Subnet (AZ-a) ──┐                                      │
+│   ├── Private Subnet (AZ-b) ──┼── ROSA Worker Nodes                  │
+│   └── Private Subnet (AZ-c) ──┘                                      │
 │                                                                      │
 │  Route53 Private Hosted Zones:                                       │
 │   ├── <cluster>.hypershift.local              (HCP internal)         │
@@ -27,12 +27,12 @@ KMS-encrypted StorageClasses, and Microsoft Entra ID OIDC authentication with ku
 ├──────────────────────────────────────────────────────────────────────┤
 │  Cluster Account (default aws provider)                              │
 │                                                                      │
-│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC         │
+│  IAM Roles (rosa CLI):  account-roles, operator-roles, OIDC          │
 │  Inline policies (Terraform):                                        │
 │   ├── control-plane-operator  → sts:AssumeRole shared VPC roles      │
 │   └── ingress-operator        → sts:AssumeRole shared VPC roles      │
 │  KMS Key (Terraform):   etcd + node volume encryption                │
-│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)         │
+│  ROSA HCP Cluster:      private, 3 worker nodes (m5.xlarge)          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Microsoft Entra ID (azuread provider)                               │
 │                                                                      │
@@ -43,6 +43,40 @@ KMS-encrypted StorageClasses, and Microsoft Entra ID OIDC authentication with ku
 │  kubeadmin:         removed — cluster relies entirely on Entra IdP   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+This architecture defines a ROSA (Red Hat OpenShift on AWS) HCP (Hosted Control Plane) deployment using a Shared VPC model and Microsoft Entra ID for identity.
+1. Shared VPC Account
+
+* Networking:
+* One VPC containing a Public Subnet, NAT Gateway, and Internet Gateway.
+   * Three Private Subnets across distinct Availability Zones (AZ-a, b, c) hosting the ROSA Worker Nodes.
+   * VPC Endpoint: PrivateLink connectivity to the HCP control plane.
+* DNS (Route53 Private Hosted Zones):
+* Internal cluster communication: <cluster>.hypershift.local.
+   * Application ingress: rosa.<cluster>.<base_dns_domain>.
+* IAM Roles (Terraform-managed):
+* route53-role: Attached to ROSASharedVPCRoute53Policy.
+   * vpc-endpoint-role: Attached to ROSASharedVPCEndpointPolicy.
+
+2. Cluster Account
+
+* IAM & Security:
+* Managed via ROSA CLI: Account roles, operator roles, and OIDC provider.
+   * Inline Policies: Grants control-plane-operator and ingress-operator permission to assume roles in the Shared VPC account.
+   * Encryption: Dedicated KMS Key for etcd and worker node volumes.
+* Compute:
+* ROSA HCP Cluster configured as private.
+   * Default footprint of 3 m5.xlarge worker nodes.
+
+3. Identity Management (Microsoft Entra ID)
+
+* Authentication:
+* App Registration configured as an OIDC relying party with a client secret.
+   * Service Principal enabled for user sign-in.
+   * ROSA built-in OAuth server configured as the OpenID Connect IdP.
+* Authorization (RBAC):
+* Entra ID Security Group mapped to the cluster-admin role.
+* Hardening:
+
 
 For testing, both accounts can be the same AWS account.
 See [SHARED-VPC-IAM.md](SHARED-VPC-IAM.md) for a detailed IAM roles and trust policies reference.
