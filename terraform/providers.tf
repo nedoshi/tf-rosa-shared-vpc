@@ -22,6 +22,14 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.11"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.0"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
+    }
   }
 }
 
@@ -78,3 +86,9 @@ provider "helm" {
     config_path = "~/.kube/config"
   }
 }
+
+# -----------------------------------------------------------------------------
+# Azure AD (Entra ID) Provider — authenticates via Azure CLI or env vars
+# Set ARM_TENANT_ID, ARM_CLIENT_ID, ARM_CLIENT_SECRET or run `az login`.
+# -----------------------------------------------------------------------------
+provider "azuread" {}
