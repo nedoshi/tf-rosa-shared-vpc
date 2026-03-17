@@ -131,7 +131,7 @@ resource "aws_route_table_association" "public" {
 # Route53 Private Hosted Zones
 # -----------------------------------------------------------------------------
 resource "aws_route53_zone" "hcp_internal" {
-  name = "hypershift.local"
+  name = "${var.cluster_name}.hypershift.local"
   vpc {
     vpc_id = aws_vpc.main.id
   }
@@ -142,7 +142,7 @@ resource "aws_route53_zone" "hcp_internal" {
 }
 
 resource "aws_route53_zone" "ingress" {
-  name = "apps.${var.cluster_name}.hypershift.local"
+  name = "rosa.${var.cluster_name}.${var.base_dns_domain}"
   vpc {
     vpc_id = aws_vpc.main.id
   }
@@ -186,14 +186,12 @@ resource "aws_iam_role" "route53" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.cluster_account_id}:root"
+          AWS = [
+            var.installer_role_arn,
+            "arn:aws:iam::${var.cluster_account_id}:root"
+          ]
         }
         Action = "sts:AssumeRole"
-        Condition = {
-          StringEquals = {
-            "sts:ExternalId" = var.cluster_account_id
-          }
-        }
       }
     ]
   })
@@ -201,19 +199,9 @@ resource "aws_iam_role" "route53" {
   tags = var.tags
 }
 
-resource "aws_iam_role_policy" "route53" {
-  name   = "${var.cluster_name}-route53-policy"
-  role   = aws_iam_role.route53.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["route53:GetChange", "route53:ChangeResourceRecordSets", "route53:ListResourceRecordSets"]
-        Resource = ["arn:aws:route53:::hostedzone/${aws_route53_zone.hcp_internal.zone_id}", "arn:aws:route53:::hostedzone/${aws_route53_zone.ingress.zone_id}"]
-      }
-    ]
-  })
+resource "aws_iam_role_policy_attachment" "route53" {
+  role       = aws_iam_role.route53.name
+  policy_arn = "arn:aws:iam::aws:policy/ROSASharedVPCRoute53Policy"
 }
 
 # -----------------------------------------------------------------------------
@@ -228,14 +216,12 @@ resource "aws_iam_role" "vpc_endpoint" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.cluster_account_id}:root"
+          AWS = [
+            var.installer_role_arn,
+            "arn:aws:iam::${var.cluster_account_id}:root"
+          ]
         }
         Action = "sts:AssumeRole"
-        Condition = {
-          StringEquals = {
-            "sts:ExternalId" = var.cluster_account_id
-          }
-        }
       }
     ]
   })
@@ -243,17 +229,7 @@ resource "aws_iam_role" "vpc_endpoint" {
   tags = var.tags
 }
 
-resource "aws_iam_role_policy" "vpc_endpoint" {
-  name   = "${var.cluster_name}-vpc-endpoint-policy"
-  role   = aws_iam_role.vpc_endpoint.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["ec2:CreateVpcEndpoint", "ec2:DescribeVpcEndpoints", "ec2:DeleteVpcEndpoints", "ec2:DescribeSubnets", "ec2:DescribeSecurityGroups"]
-        Resource = "*"
-      }
-    ]
-  })
+resource "aws_iam_role_policy_attachment" "vpc_endpoint" {
+  role       = aws_iam_role.vpc_endpoint.name
+  policy_arn = "arn:aws:iam::aws:policy/ROSASharedVPCEndpointPolicy"
 }

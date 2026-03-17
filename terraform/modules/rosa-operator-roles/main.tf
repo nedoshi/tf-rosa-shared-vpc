@@ -25,7 +25,7 @@ data "aws_iam_role" "kube_controller_manager" {
 }
 
 data "aws_iam_role" "cloud_network_config_controller" {
-  name = "${var.operator_roles_prefix}-openshift-cloud-network-config-controller-cloud-credential"
+  name = "${var.operator_roles_prefix}-openshift-cloud-network-config-controller-cloud-credentials"
 }
 
 data "aws_iam_role" "ebs_csi_driver" {
