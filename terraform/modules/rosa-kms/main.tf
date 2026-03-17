@@ -89,9 +89,9 @@ data "aws_iam_policy_document" "kms" {
     resources = ["*"]
   }
 
-  # EBS CSI Driver - Encrypt, Decrypt, ReEncrypt*, GenerateDataKey*, DescribeKey, CreateGrant
+  # EBS CSI Driver - data-plane KMS operations (called by EC2 on behalf of CSI driver)
   statement {
-    sid    = "AllowEBSCSIDriverForPVs"
+    sid    = "AllowEBSCSIDriverKMSOperations"
     effect = "Allow"
     principals {
       type        = "AWS"
@@ -102,8 +102,23 @@ data "aws_iam_policy_document" "kms" {
       "kms:Decrypt",
       "kms:ReEncrypt*",
       "kms:GenerateDataKey*",
-      "kms:DescribeKey",
-      "kms:CreateGrant"
+      "kms:DescribeKey"
+    ]
+    resources = ["*"]
+  }
+
+  # EBS CSI Driver - CreateGrant (restricted to AWS service grants only)
+  statement {
+    sid    = "AllowEBSCSIDriverCreateGrant"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = [var.operator_role_arns.ebs_csi_driver]
+    }
+    actions = [
+      "kms:CreateGrant",
+      "kms:RevokeGrant",
+      "kms:ListGrants"
     ]
     resources = ["*"]
 
