@@ -667,10 +667,3 @@ structure. The required pattern is:
 |------|-------------|---------|
 | HCP internal | `<cluster_name>.hypershift.local` | `demo1.hypershift.local` |
 | Ingress | `rosa.<cluster_name>.<base_dns_domain>` | `rosa.demo1.5lqd.p3.openshiftapps.com` |
-
-## Entra ID OIDC Testing Guide
-
-For comprehensive post-installation validation commands covering IdP verification,
-login testing, RBAC checks, token claim inspection, and troubleshooting, see:
-
-**[docs/entra-id-oidc-testing-guide.md](docs/entra-id-oidc-testing-guide.md)**
